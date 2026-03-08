@@ -123,8 +123,8 @@ serve(async (req) => {
     const embData = await embResp.json();
     const queryEmbedding = embData.data[0].embedding;
 
-    // Retrieve chunks
-    const { data: chunks, error: matchError } = await supabase.rpc("match_chunks", {
+    // Retrieve chunks (semantic)
+    const { data: semanticChunks, error: matchError } = await supabase.rpc("match_chunks", {
       query_embedding: queryEmbedding,
       match_threshold: similarityThreshold,
       match_count: topK,
@@ -134,6 +134,47 @@ serve(async (req) => {
       console.error("Match error:", matchError);
       throw new Error("Failed to retrieve chunks");
     }
+
+    // Platform-aware supplemental retrieval (improves precision for queries like "Android")
+    const platformKeywords = ["android", "iphone", "ios", "windows", "mac", "chromebook", "linux"];
+    const normalizedMessage = user_message.toLowerCase();
+    const requestedPlatforms = platformKeywords.filter((p) => normalizedMessage.includes(p));
+
+    let supplementalChunks: any[] = [];
+    if (requestedPlatforms.length > 0) {
+      const orFilter = requestedPlatforms
+        .map((p) => `title.ilike.%${p}%`)
+        .join(",");
+
+      const { data: platformArticles } = await supabase
+        .from("kb_articles")
+        .select("id")
+        .or(orFilter)
+        .limit(5);
+
+      const platformArticleIds = (platformArticles || []).map((a: any) => a.id);
+
+      if (platformArticleIds.length > 0) {
+        const { data: extraChunks } = await supabase
+          .from("kb_chunks")
+          .select("id, article_uuid, chunk_index, section, content, source_url")
+          .in("article_uuid", platformArticleIds)
+          .order("chunk_index", { ascending: true })
+          .limit(6);
+
+        supplementalChunks = (extraChunks || []).map((c: any) => ({
+          ...c,
+          similarity: 0.99,
+        }));
+      }
+    }
+
+    // Merge supplemental + semantic chunks (dedupe by chunk id)
+    const mergedById = new Map<string, any>();
+    [...supplementalChunks, ...(semanticChunks || [])].forEach((c: any) => {
+      if (!mergedById.has(c.id)) mergedById.set(c.id, c);
+    });
+    const chunks = Array.from(mergedById.values()).slice(0, Math.max(topK, 6));
 
     // Get article titles
     const articleIds = [...new Set((chunks || []).map((c: any) => c.article_uuid))];
