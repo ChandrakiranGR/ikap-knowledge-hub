@@ -20,23 +20,50 @@ function parseHTML(html: string): ParsedArticle {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, "text/html");
 
-  // Remove scripts, styles, nav, footer, header
-  doc.querySelectorAll("script, style, nav, footer, header, aside, .nav, .footer, .header, .sidebar").forEach((el) => el.remove());
+  // Extract ServiceNow-specific metadata before stripping
+  const snArticleId =
+    doc.querySelector(".kb-number-info .ng-binding")?.textContent?.trim() ||
+    doc.querySelector('meta[name="article-id"], meta[name="sys_id"], meta[name="number"]')?.getAttribute("content") || "";
 
-  // Try to extract title
+  // Extract source URL from ServiceNow saved page comment
+  let sourceUrl = "";
+  const firstComment = html.match(/saved from url=\(\d+\)(https?:\/\/[^\s)]+)/);
+  if (firstComment) sourceUrl = firstComment[1];
+
+  // Extract category from breadcrumbs
+  const breadcrumbLinks = doc.querySelectorAll(".breadcrumbs a, .ais-breadCrumbs a");
+  const category = breadcrumbLinks.length > 0
+    ? Array.from(breadcrumbLinks).map(a => a.textContent?.trim()).filter(Boolean).slice(-1)[0] || ""
+    : "";
+
+  // Remove all noise: scripts, styles, nav, footer, header, sidebars, ServiceNow chrome
+  doc.querySelectorAll([
+    "script", "style", "nav", "footer", "header", "aside", "noscript",
+    ".nav", ".footer", ".header", ".sidebar",
+    // ServiceNow-specific noise
+    ".kb-end-buttons", ".kb-panel-heading", ".kb-number-info",
+    ".kb-favorites-container", ".kb-comment-wrapper", ".kb-help-wrapper",
+    ".title-secondary-data", ".breadcrumb-container", ".breadcrumbs",
+    ".kb-permalink", ".str-rating", ".sp-stars", ".kb-rate-article",
+    ".category-widget", ".dropdown-menu", ".global-footer",
+    ".navbar", "[sn-atf-area='Article Favorites']",
+    "[sn-atf-area='Knowledge Article Comments']",
+    "[sn-atf-area='NU Knowledge Breadcrumbs']",
+    "[sn-atf-area='Tech footer - top and global']",
+    "img" // Remove image tags (they won't render in text anyway)
+  ].join(", ")).forEach((el) => el.remove());
+
+  // Try to extract title — prefer ServiceNow KB title
   const title =
+    doc.querySelector(".kb-title-header")?.textContent?.trim() ||
     doc.querySelector("h1")?.textContent?.trim() ||
     doc.querySelector("title")?.textContent?.trim() ||
-    doc.querySelector('[class*="title"]')?.textContent?.trim() ||
     "Untitled Article";
 
-  // Try to extract article ID from meta or content
-  const articleIdMeta = doc.querySelector('meta[name="article-id"], meta[name="sys_id"], meta[name="number"]');
-  const articleId = articleIdMeta?.getAttribute("content") || "";
-
-  // Extract main content area
+  // Target the actual article content — ServiceNow uses .kb-article-content or article tag
   const mainEl =
-    doc.querySelector("main, article, [role='main'], .kb-article, .article-body, .content-body, #content") ||
+    doc.querySelector(".kb-article-content, article.kb-article-content, .kb-wrapper .kb-article-content") ||
+    doc.querySelector("article, main, [role='main'], .article-body, .content-body, #content") ||
     doc.body;
 
   // Convert to readable text preserving structure
@@ -44,10 +71,10 @@ function parseHTML(html: string): ParsedArticle {
 
   return {
     title,
-    article_id: articleId,
-    category: "",
+    article_id: snArticleId,
+    category,
     tags: "",
-    source_url: "",
+    source_url: sourceUrl,
     content: textContent,
     content_type: "html",
   };
