@@ -28,7 +28,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [selectedSources, setSelectedSources] = useState<Source[]>([]);
+  
   const [ticketModal, setTicketModal] = useState<{ question: string; answer: string; sources: Source[] } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -54,15 +54,19 @@ export default function ChatPage() {
 
       if (error) throw error;
 
+      // Strip [Source X] citations from the answer text
+      const cleanAnswer = (data.answer || "I couldn't find relevant information in the knowledge base.")
+        .replace(/\s*\[Source\s*\d+\]/gi, "")
+        .replace(/\s*\[Sources?\s*\d+(?:\s*,\s*\d+)*\]/gi, "");
+
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
-        content: data.answer || "I couldn't find relevant information in the knowledge base.",
+        content: cleanAnswer,
         sources: data.sources || [],
         confidence: data.confidence || "medium",
       };
       setMessages((prev) => [...prev, assistantMsg]);
-      if (data.sources?.length) setSelectedSources(data.sources);
     } catch (err) {
       console.error("Chat error:", err);
       const errorMsg: ChatMessage = {
@@ -86,20 +90,6 @@ export default function ChatPage() {
       <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
         <div className={`max-w-[80%] rounded-lg px-4 py-3 ${isUser ? "bg-chat-user text-foreground" : "bg-chat-assistant border text-foreground"}`}>
           <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
-          {!isUser && msg.sources && msg.sources.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2 border-t pt-2">
-              {msg.sources.map((s, i) => (
-                <button
-                  key={i}
-                  onClick={() => setSelectedSources(msg.sources || [])}
-                  className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
-                >
-                  <BookOpen className="h-3 w-3" />
-                  Source {i + 1}
-                </button>
-              ))}
-            </div>
-          )}
           {!isUser && (
             <div className="mt-2 flex items-center gap-2 border-t pt-2">
               <button onClick={() => handleFeedback(msg.id, true)} className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
@@ -187,51 +177,6 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Sources Panel */}
-        <div className="hidden w-80 flex-col border-l bg-source-panel lg:flex">
-          <div className="border-b p-4">
-            <h3 className="font-semibold text-foreground">Sources</h3>
-            <p className="text-xs text-muted-foreground">Referenced KB articles</p>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {selectedSources.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground">
-                Sources will appear here when you ask a question.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {selectedSources.map((source, i) => (
-                  <div key={i} className="source-card">
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="flex h-5 w-5 items-center justify-center rounded bg-primary text-[10px] font-bold text-primary-foreground">
-                        {i + 1}
-                      </span>
-                      <span className="text-xs font-semibold text-foreground line-clamp-1">
-                        {source.article_title}
-                      </span>
-                    </div>
-                    {source.section && (
-                      <p className="mb-1 text-[11px] font-medium text-muted-foreground">
-                        § {source.section}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground line-clamp-4">{source.snippet}</p>
-                    {source.source_url && (
-                      <a
-                        href={source.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-block text-xs text-primary hover:underline"
-                      >
-                        View article →
-                      </a>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
       {ticketModal && (
