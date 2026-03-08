@@ -28,7 +28,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [selectedSources, setSelectedSources] = useState<Source[]>([]);
+  
   const [ticketModal, setTicketModal] = useState<{ question: string; answer: string; sources: Source[] } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
