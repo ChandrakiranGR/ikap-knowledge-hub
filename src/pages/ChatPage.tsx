@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Send, ThumbsUp, ThumbsDown, Ticket, Loader2, BookOpen } from "lucide-react";
@@ -89,7 +90,9 @@ export default function ChatPage() {
     return (
       <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
         <div className={`max-w-[80%] rounded-lg px-4 py-3 ${isUser ? "bg-chat-user text-foreground" : "bg-chat-assistant border text-foreground"}`}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+          <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
+            <ReactMarkdown>{msg.content}</ReactMarkdown>
+          </div>
           {!isUser && (
             <div className="mt-2 flex items-center gap-2 border-t pt-2">
               <button onClick={() => handleFeedback(msg.id, true)} className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
