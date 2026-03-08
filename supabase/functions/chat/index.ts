@@ -146,11 +146,20 @@ serve(async (req) => {
         .map((p) => `title.ilike.%${p}%`)
         .join(",");
 
-      const { data: platformArticles } = await supabase
+      let platformArticleQuery = supabase
         .from("kb_articles")
         .select("id")
-        .or(orFilter)
-        .limit(5);
+        .or(orFilter);
+
+      // Keep supplemental retrieval focused to the same topic intent
+      if (normalizedMessage.includes("nuwave")) {
+        platformArticleQuery = platformArticleQuery.ilike("title", "%nuwave%");
+      }
+      if (!normalizedMessage.includes("vpn")) {
+        platformArticleQuery = platformArticleQuery.not("title", "ilike", "%vpn%");
+      }
+
+      const { data: platformArticles } = await platformArticleQuery.limit(5);
 
       const platformArticleIds = (platformArticles || []).map((a: any) => a.id);
 
