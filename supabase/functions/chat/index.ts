@@ -216,7 +216,7 @@ serve(async (req) => {
     const contextText = sources
       .map(
         (s: any, i: number) =>
-          `[Source ${i + 1}] Title: ${s.article_title}${s.section ? ` | Section: ${s.section}` : ""}\n${(chunks || [])[i]?.content || ""}`
+          `[Source ${i + 1}] Title: ${s.article_title}${s.section ? ` | Section: ${s.section}` : ""}${s.source_url ? ` | URL: ${s.source_url}` : ""}\n${(chunks || [])[i]?.content || ""}`
       )
       .join("\n\n---\n\n");
 
