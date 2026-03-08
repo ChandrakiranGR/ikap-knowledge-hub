@@ -1,10 +1,180 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Navbar } from "@/components/Navbar";
 import { AdminGuard } from "@/components/AdminGuard";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, FileText, Loader2, CheckCircle } from "lucide-react";
+import { Upload, FileText, Loader2, CheckCircle, FileUp, FileJson, FileCode } from "lucide-react";
+
+interface ParsedArticle {
+  title: string;
+  article_id: string;
+  category: string;
+  tags: string;
+  source_url: string;
+  content: string;
+  content_type: string;
+}
+
+function parseHTML(html: string): ParsedArticle {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+
+  // Remove scripts, styles, nav, footer, header
+  doc.querySelectorAll("script, style, nav, footer, header, aside, .nav, .footer, .header, .sidebar").forEach((el) => el.remove());
+
+  // Try to extract title
+  const title =
+    doc.querySelector("h1")?.textContent?.trim() ||
+    doc.querySelector("title")?.textContent?.trim() ||
+    doc.querySelector('[class*="title"]')?.textContent?.trim() ||
+    "Untitled Article";
+
+  // Try to extract article ID from meta or content
+  const articleIdMeta = doc.querySelector('meta[name="article-id"], meta[name="sys_id"], meta[name="number"]');
+  const articleId = articleIdMeta?.getAttribute("content") || "";
+
+  // Extract main content area
+  const mainEl =
+    doc.querySelector("main, article, [role='main'], .kb-article, .article-body, .content-body, #content") ||
+    doc.body;
+
+  // Convert to readable text preserving structure
+  const textContent = extractStructuredText(mainEl);
+
+  return {
+    title,
+    article_id: articleId,
+    category: "",
+    tags: "",
+    source_url: "",
+    content: textContent,
+    content_type: "html",
+  };
+}
+
+function extractStructuredText(el: Element): string {
+  const lines: string[] = [];
+
+  function walk(node: Node, depth = 0) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim();
+      if (text) lines.push(text);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = (node as Element).tagName.toLowerCase();
+
+    // Add heading markers
+    if (/^h[1-6]$/.test(tag)) {
+      const text = (node as Element).textContent?.trim();
+      if (text) {
+        lines.push("");
+        lines.push(text);
+        lines.push("");
+      }
+      return;
+    }
+
+    // List items
+    if (tag === "li") {
+      const text = (node as Element).textContent?.trim();
+      if (text) {
+        const parent = (node as Element).parentElement;
+        const isOrdered = parent?.tagName.toLowerCase() === "ol";
+        const index = Array.from(parent?.children || []).indexOf(node as Element) + 1;
+        lines.push(isOrdered ? `${index}. ${text}` : `- ${text}`);
+      }
+      return;
+    }
+
+    // Paragraphs and divs get spacing
+    if (tag === "p" || tag === "div") {
+      const before = lines.length;
+      node.childNodes.forEach((child) => walk(child, depth + 1));
+      if (lines.length > before) lines.push("");
+      return;
+    }
+
+    // Table rows
+    if (tag === "tr") {
+      const cells = Array.from((node as Element).querySelectorAll("td, th"))
+        .map((c) => c.textContent?.trim())
+        .filter(Boolean);
+      if (cells.length) lines.push(cells.join(" | "));
+      return;
+    }
+
+    // Skip table wrapper, process children
+    if (tag === "table" || tag === "tbody" || tag === "thead") {
+      node.childNodes.forEach((child) => walk(child, depth + 1));
+      lines.push("");
+      return;
+    }
+
+    // Default: recurse
+    node.childNodes.forEach((child) => walk(child, depth + 1));
+  }
+
+  walk(el);
+
+  // Clean up excessive blank lines
+  return lines
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function parseJSON(jsonStr: string): ParsedArticle[] {
+  const data = JSON.parse(jsonStr);
+
+  // Handle array of articles
+  const articles = Array.isArray(data) ? data : [data];
+
+  return articles.map((item: any) => {
+    // Flexible field mapping — try common field names
+    const title =
+      item.title || item.name || item.short_description || item.subject || "Untitled";
+    const articleId =
+      item.article_id || item.number || item.sys_id || item.id || "";
+    const category =
+      item.category || item.kb_category || item.type || "";
+    const tags =
+      (Array.isArray(item.tags) ? item.tags.join(", ") : item.tags) ||
+      item.keywords ||
+      "";
+    const sourceUrl =
+      item.source_url || item.url || item.link || "";
+
+    // Content: try multiple field names
+    const content =
+      item.content ||
+      item.text ||
+      item.body ||
+      item.kb_content ||
+      item.article_body ||
+      item.description ||
+      item.raw_text ||
+      "";
+
+    // If content is HTML, strip tags
+    let cleanContent = content;
+    if (/<[^>]+>/.test(content)) {
+      const parsed = parseHTML(content);
+      cleanContent = parsed.content;
+    }
+
+    return {
+      title,
+      article_id: String(articleId),
+      category: String(category),
+      tags: String(tags),
+      source_url: String(sourceUrl),
+      content: cleanContent,
+      content_type: "json",
+    };
+  });
+}
 
 export default function AdminIngestPage() {
   const [title, setTitle] = useState("");
@@ -15,35 +185,48 @@ export default function AdminIngestPage() {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ chunks: number; warnings: string[] } | null>(null);
+  const [batchResults, setBatchResults] = useState<{ title: string; chunks: number; status: string }[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [activeTab, setActiveTab] = useState<"paste" | "upload">("paste");
 
-  const handleIngest = async () => {
-    if (!title.trim() || !content.trim()) {
+  const handleIngest = async (article?: ParsedArticle) => {
+    const t = article?.title || title.trim();
+    const c = article?.content || content.trim();
+    if (!t || !c) {
       toast.error("Title and content are required.");
-      return;
+      return null;
     }
+
+    const { data, error } = await supabase.functions.invoke("ingest", {
+      body: {
+        title: t,
+        article_id: (article?.article_id || articleId).trim() || undefined,
+        category: (article?.category || category).trim() || undefined,
+        tags: (article?.tags || tags).split(",").map((t) => t.trim()).filter(Boolean),
+        source_url: (article?.source_url || sourceUrl).trim() || undefined,
+        content: c,
+        content_type: article?.content_type || "pasted_text",
+      },
+    });
+    if (error) throw error;
+    return data;
+  };
+
+  const handleSingleIngest = async () => {
     setLoading(true);
     setResult(null);
     try {
-      const { data, error } = await supabase.functions.invoke("ingest", {
-        body: {
-          title: title.trim(),
-          article_id: articleId.trim() || undefined,
-          category: category.trim() || undefined,
-          tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-          source_url: sourceUrl.trim() || undefined,
-          content: content.trim(),
-          content_type: "pasted_text",
-        },
-      });
-      if (error) throw error;
-      setResult({ chunks: data.chunks_created || 0, warnings: data.warnings || [] });
-      toast.success(`Article ingested: ${data.chunks_created} chunks created`);
-      setTitle("");
-      setArticleId("");
-      setCategory("");
-      setTags("");
-      setSourceUrl("");
-      setContent("");
+      const data = await handleIngest();
+      if (data) {
+        setResult({ chunks: data.chunks_created || 0, warnings: data.warnings || [] });
+        toast.success(`Article ingested: ${data.chunks_created} chunks created`);
+        setTitle("");
+        setArticleId("");
+        setCategory("");
+        setTags("");
+        setSourceUrl("");
+        setContent("");
+      }
     } catch (err) {
       console.error(err);
       toast.error("Ingestion failed.");
@@ -52,7 +235,71 @@ export default function AdminIngestPage() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+
+    setLoading(true);
+    setBatchResults([]);
+    const results: { title: string; chunks: number; status: string }[] = [];
+
+    for (const file of Array.from(files)) {
+      try {
+        const text = await file.text();
+        const ext = file.name.toLowerCase().split(".").pop();
+
+        let articles: ParsedArticle[] = [];
+
+        if (ext === "json") {
+          articles = parseJSON(text);
+        } else if (ext === "html" || ext === "htm") {
+          articles = [parseHTML(text)];
+        } else {
+          // Treat as plain text
+          articles = [{
+            title: file.name.replace(/\.[^.]+$/, ""),
+            article_id: "",
+            category: "",
+            tags: "",
+            source_url: "",
+            content: text,
+            content_type: "pasted_text",
+          }];
+        }
+
+        for (const article of articles) {
+          if (!article.content.trim()) {
+            results.push({ title: article.title, chunks: 0, status: "empty_content" });
+            continue;
+          }
+          try {
+            const data = await handleIngest(article);
+            results.push({
+              title: article.title,
+              chunks: data?.chunks_created || 0,
+              status: "ok",
+            });
+          } catch (err) {
+            console.error("Ingest error for:", article.title, err);
+            results.push({ title: article.title, chunks: 0, status: "error" });
+          }
+        }
+      } catch (err) {
+        console.error("File parse error:", file.name, err);
+        results.push({ title: file.name, chunks: 0, status: "parse_error" });
+      }
+    }
+
+    setBatchResults(results);
+    const successCount = results.filter((r) => r.status === "ok").length;
+    const totalChunks = results.reduce((sum, r) => sum + r.chunks, 0);
+    toast.success(`Ingested ${successCount} article(s), ${totalChunks} total chunks`);
+    setLoading(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleLoadSample = () => {
+    setActiveTab("paste");
     setTitle("How to Enroll in Duo MFA");
     setArticleId("KB0012345");
     setCategory("Security");
@@ -98,6 +345,13 @@ For additional help, contact the IT Service Desk:
 - ServiceNow: https://service.northeastern.edu`);
   };
 
+  const tabClass = (tab: string) =>
+    `px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+      activeTab === tab
+        ? "bg-card text-foreground border border-b-0"
+        : "text-muted-foreground hover:text-foreground"
+    }`;
+
   return (
     <AdminGuard>
       <div className="min-h-screen bg-background">
@@ -114,52 +368,160 @@ For additional help, contact the IT Service Desk:
             </Button>
           </div>
 
-          <div className="space-y-4 rounded-lg border bg-card p-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-foreground">Title *</label>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="Article title" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-foreground">Article ID</label>
-                <input value={articleId} onChange={(e) => setArticleId(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="KB0012345" />
-              </div>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-sm font-medium text-foreground">Category</label>
-                <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="e.g. Security, Network" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-foreground">Tags (comma-separated)</label>
-                <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="MFA, Duo, Security" />
-              </div>
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">Source URL</label>
-              <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="https://..." />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">KB Content *</label>
-              <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={12} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground font-mono" placeholder="Paste your KB article content here..." />
-            </div>
+          {/* Tabs */}
+          <div className="flex gap-1 mb-0">
+            <button className={tabClass("paste")} onClick={() => setActiveTab("paste")}>
+              <span className="flex items-center gap-1.5">
+                <FileText className="h-4 w-4" /> Paste Text
+              </span>
+            </button>
+            <button className={tabClass("upload")} onClick={() => setActiveTab("upload")}>
+              <span className="flex items-center gap-1.5">
+                <FileUp className="h-4 w-4" /> Upload Files
+              </span>
+            </button>
+          </div>
 
-            <div className="flex items-center gap-4">
-              <Button onClick={handleIngest} disabled={loading}>
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                Ingest Article
-              </Button>
-              {result && (
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span className="text-foreground">{result.chunks} chunks created</span>
-                  {result.warnings.length > 0 && (
-                    <span className="text-accent">({result.warnings.join(", ")})</span>
+          {activeTab === "paste" && (
+            <div className="space-y-4 rounded-lg rounded-tl-none border bg-card p-6">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Title *</label>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="Article title" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Article ID</label>
+                  <input value={articleId} onChange={(e) => setArticleId(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="KB0012345" />
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Category</label>
+                  <input value={category} onChange={(e) => setCategory(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="e.g. Security, Network" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-foreground">Tags (comma-separated)</label>
+                  <input value={tags} onChange={(e) => setTags(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="MFA, Duo, Security" />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">Source URL</label>
+                <input value={sourceUrl} onChange={(e) => setSourceUrl(e.target.value)} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground" placeholder="https://..." />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground">KB Content *</label>
+                <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={12} className="w-full rounded-md border bg-background px-3 py-2 text-sm text-foreground font-mono" placeholder="Paste your KB article content here..." />
+              </div>
+
+              <div className="flex items-center gap-4">
+                <Button onClick={handleSingleIngest} disabled={loading}>
+                  {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  Ingest Article
+                </Button>
+                {result && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="text-foreground">{result.chunks} chunks created</span>
+                    {result.warnings.length > 0 && (
+                      <span className="text-accent">({result.warnings.join(", ")})</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "upload" && (
+            <div className="space-y-4 rounded-lg rounded-tl-none border bg-card p-6">
+              <div className="rounded-lg border-2 border-dashed border-border p-8 text-center">
+                <FileUp className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
+                <h3 className="mb-1 font-semibold text-foreground">Upload KB Files</h3>
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Supports <strong>.html</strong>, <strong>.json</strong>, and <strong>.txt</strong> files. JSON can contain a single article or an array of articles.
+                </p>
+
+                <div className="mb-4 rounded-lg bg-muted p-3 text-left text-xs text-muted-foreground">
+                  <p className="mb-2 font-medium text-foreground">Supported JSON formats:</p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div>
+                      <p className="font-medium">Single article:</p>
+                      <pre className="mt-1 overflow-x-auto rounded bg-background p-2">
+{`{
+  "title": "...",
+  "content": "...",
+  "article_id": "KB001",
+  "category": "Security"
+}`}
+                      </pre>
+                    </div>
+                    <div>
+                      <p className="font-medium">Array of articles:</p>
+                      <pre className="mt-1 overflow-x-auto rounded bg-background p-2">
+{`[
+  { "title": "...", "body": "..." },
+  { "name": "...", "text": "..." }
+]`}
+                      </pre>
+                    </div>
+                  </div>
+                  <p className="mt-2">
+                    <span className="flex flex-wrap gap-1">
+                      <span className="inline-flex items-center gap-1"><FileJson className="h-3 w-3" /> Fields auto-detected:</span>
+                      <code>title/name/short_description</code>,
+                      <code>content/body/text/description</code>,
+                      <code>article_id/number/sys_id</code>,
+                      <code>category</code>, <code>tags/keywords</code>,
+                      <code>source_url/url/link</code>
+                    </span>
+                  </p>
+                </div>
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".html,.htm,.json,.txt"
+                  multiple
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <Button onClick={() => fileInputRef.current?.click()} disabled={loading}>
+                  {loading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <FileUp className="mr-2 h-4 w-4" />
                   )}
+                  {loading ? "Processing..." : "Select Files"}
+                </Button>
+              </div>
+
+              {/* Batch results */}
+              {batchResults.length > 0 && (
+                <div className="rounded-lg border bg-background p-4">
+                  <h3 className="mb-3 font-semibold text-foreground">
+                    Ingestion Results ({batchResults.filter((r) => r.status === "ok").length}/{batchResults.length} succeeded)
+                  </h3>
+                  <div className="max-h-64 space-y-2 overflow-y-auto">
+                    {batchResults.map((r, i) => (
+                      <div key={i} className="flex items-center justify-between rounded border px-3 py-2 text-sm">
+                        <span className="truncate text-foreground">{r.title}</span>
+                        <span className="ml-2 shrink-0">
+                          {r.status === "ok" ? (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              {r.chunks} chunks
+                            </span>
+                          ) : (
+                            <span className="text-destructive">{r.status}</span>
+                          )}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </AdminGuard>
