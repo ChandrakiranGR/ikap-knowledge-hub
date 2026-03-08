@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { AdminGuard } from "@/components/AdminGuard";
 import { supabase } from "@/integrations/supabase/client";
-import { FileText, Trash2, RefreshCw } from "lucide-react";
+import { FileText, Trash2, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
