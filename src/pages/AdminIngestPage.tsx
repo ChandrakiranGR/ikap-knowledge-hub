@@ -145,8 +145,38 @@ function extractStructuredText(el: Element): string {
 
   walk(el);
 
-  // Clean up excessive blank lines
+  // Clean up excessive blank lines and filter noise
+  const noisePatterns = [
+    /^(\(\*\)|\( \))+$/,  // Star rating markers
+    /^\d+% found this useful$/,
+    /^Helpful\??$/i,
+    /^Yes$/,
+    /^No$/,
+    /^Rate this article$/i,
+    /^Created with Sketch\.?$/i,
+    /^Copy Permalink$/i,
+    /^Back to top$/i,
+    /^Subscribe$/i,
+    /^Flag Article$/i,
+    /^Edit Article$/i,
+    /^Save Favorite$/i,
+    /^You have no favorites\.$/i,
+    /^Article metadata\.?$/i,
+    /^Revised by .+$/i,
+    /^This article (was updated|has \d+ views|has average rating)/i,
+    /^\d+\s*Views?$/i,
+    /^\d+mo? ago$/,
+    /^\d+ months? ago$/,
+    /^BMP$/,
+    /^Favorite Articles$/i,
+  ];
+
   return lines
+    .filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return true; // keep blank lines for spacing
+      return !noisePatterns.some(p => p.test(trimmed));
+    })
     .join("\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
