@@ -11,6 +11,7 @@ import AdminIngestPage from "./pages/AdminIngestPage";
 import AdminArticlesPage from "./pages/AdminArticlesPage";
 import AdminSettingsPage from "./pages/AdminSettingsPage";
 import AdminEvalPage from "./pages/AdminEvalPage";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
             <Route path="/admin/articles" element={<AdminArticlesPage />} />
             <Route path="/admin/settings" element={<AdminSettingsPage />} />
             <Route path="/admin/eval" element={<AdminEvalPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
