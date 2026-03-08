@@ -51,6 +51,19 @@ export default function AdminArticlesPage() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    if (!confirm(`Delete ALL ${articles.length} articles and their chunks? This cannot be undone.`)) return;
+    if (!confirm("Are you absolutely sure? This will remove all KB data.")) return;
+    
+    const { error } = await supabase.from("kb_articles").delete().neq("id", "");
+    if (error) {
+      toast.error("Failed to delete articles");
+    } else {
+      toast.success("All articles deleted. You can now re-upload with the improved parser.");
+      fetchArticles();
+    }
+  };
+
   return (
     <AdminGuard>
       <div className="min-h-screen bg-background">
@@ -61,10 +74,18 @@ export default function AdminArticlesPage() {
               <h1 className="text-2xl font-bold text-foreground">KB Articles</h1>
               <p className="text-sm text-muted-foreground">{articles.length} articles ingested</p>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchArticles}>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Refresh
-            </Button>
+            <div className="flex items-center gap-2">
+              {articles.length > 0 && (
+                <Button variant="destructive" size="sm" onClick={handleDeleteAll}>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Delete All
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={fetchArticles}>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-lg border bg-card">
