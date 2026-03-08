@@ -80,7 +80,7 @@ serve(async (req) => {
 
     // Get active system prompt
     let systemPrompt =
-      "You are IKAP, an IT Knowledge Base assistant. Use ONLY the provided Sources. Every claim must have citations like [Source 1].";
+      "You are IKAP, an IT Knowledge Base assistant. Use ONLY the provided Sources. Every claim must have citations like [Source 1]. If a source includes a URL, provide it directly when the user asks for a link.";
     if (settings?.active_prompt_version_id) {
       const { data: promptData } = await supabase
         .from("prompt_versions")
@@ -203,12 +203,16 @@ serve(async (req) => {
     // Build context
     const sources = (chunks || []).map((chunk: any, i: number) => {
       const article = articlesMap[chunk.article_uuid] || {};
+      const derivedArticleUrl = article.article_id
+        ? `https://service.northeastern.edu/tech?id=kb_article&sysparm_article=${article.article_id}`
+        : null;
+
       return {
         chunk_id: chunk.id,
         article_title: article.title || "Unknown",
         article_id: article.article_id || null,
         section: chunk.section || null,
-        source_url: chunk.source_url || article.source_url || null,
+        source_url: chunk.source_url || article.source_url || derivedArticleUrl,
         snippet: chunk.content?.substring(0, 300) || "",
       };
     });
