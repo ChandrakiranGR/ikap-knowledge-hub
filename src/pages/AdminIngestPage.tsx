@@ -203,6 +203,42 @@ function parseJSON(jsonStr: string): ParsedArticle[] {
     const sourceUrl =
       item.source_url || item.url || item.link || "";
 
+    // Handle structured sections format (from pre-processed KB articles)
+    if (item.sections && Array.isArray(item.sections)) {
+      const contentParts: string[] = [];
+      for (const section of item.sections) {
+        if (section.heading) {
+          contentParts.push(`## ${section.heading}`);
+        }
+        if (section.steps && Array.isArray(section.steps)) {
+          // Deduplicate steps (the pre-processed JSON has duplicates)
+          const seen = new Set<string>();
+          section.steps.forEach((step: string, i: number) => {
+            if (!seen.has(step)) {
+              seen.add(step);
+              contentParts.push(`${i + 1}. ${step}`);
+            }
+          });
+        }
+        if (section.content) {
+          contentParts.push(section.content);
+        }
+        if (section.text) {
+          contentParts.push(section.text);
+        }
+        contentParts.push("");
+      }
+      return {
+        title,
+        article_id: String(articleId),
+        category: String(category),
+        tags: String(tags),
+        source_url: String(sourceUrl),
+        content: contentParts.join("\n").trim(),
+        content_type: "json",
+      };
+    }
+
     // Content: try multiple field names
     const content =
       item.content ||

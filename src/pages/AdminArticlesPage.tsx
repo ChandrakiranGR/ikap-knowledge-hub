@@ -55,9 +55,11 @@ export default function AdminArticlesPage() {
     if (!confirm(`Delete ALL ${articles.length} articles and their chunks? This cannot be undone.`)) return;
     if (!confirm("Are you absolutely sure? This will remove all KB data.")) return;
     
-    const { error } = await supabase.from("kb_articles").delete().neq("id", "");
+    const { data, error } = await supabase.functions.invoke("admin-delete-articles", {
+      body: { article_ids: null },
+    });
     if (error) {
-      toast.error("Failed to delete articles");
+      toast.error("Failed to delete articles: " + (error.message || "Unknown error"));
     } else {
       toast.success("All articles deleted. You can now re-upload with the improved parser.");
       fetchArticles();
