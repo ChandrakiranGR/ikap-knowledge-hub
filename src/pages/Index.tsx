@@ -1,12 +1,96 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { MessageSquare, Shield, BookOpen, AlertTriangle } from "lucide-react";
+import { Navbar } from "@/components/Navbar";
 
 const Index = () => {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      <Navbar />
+      
+      {/* Hero */}
+      <section className="relative overflow-hidden">
+        <div className="neu-gradient absolute inset-0 opacity-5" />
+        <div className="container relative py-24 md:py-32">
+          <div className="mx-auto max-w-3xl text-center">
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border bg-card px-4 py-1.5 text-sm text-muted-foreground">
+              <Shield className="h-4 w-4 text-primary" />
+              Powered by Northeastern IT Knowledge Base
+            </div>
+            <h1 className="mb-6 text-4xl font-extrabold tracking-tight text-foreground md:text-6xl">
+              Intelligent Knowledge
+              <span className="block text-primary">Assistant Platform</span>
+            </h1>
+            <p className="mb-8 text-lg text-muted-foreground md:text-xl">
+              Get instant, accurate answers from IT Help Desk knowledge base articles — 
+              with citations and source verification.
+            </p>
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-center">
+              <Link to="/chat">
+                <Button size="lg" className="gap-2 text-base">
+                  <MessageSquare className="h-5 w-5" />
+                  Open IKAP Chat
+                </Button>
+              </Link>
+              <Link to="/admin/login">
+                <Button variant="outline" size="lg" className="gap-2 text-base">
+                  <Shield className="h-5 w-5" />
+                  Admin Login
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-t bg-card py-20">
+        <div className="container">
+          <div className="mx-auto grid max-w-4xl gap-8 md:grid-cols-3">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                <BookOpen className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="mb-2 font-semibold text-foreground">Citation-Backed Answers</h3>
+              <p className="text-sm text-muted-foreground">Every response includes verifiable references to source KB articles.</p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                <MessageSquare className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="mb-2 font-semibold text-foreground">Conversational Search</h3>
+              <p className="text-sm text-muted-foreground">Ask questions naturally and get step-by-step answers from the knowledge base.</p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
+                <Shield className="h-6 w-6 text-primary" />
+              </div>
+              <h3 className="mb-2 font-semibold text-foreground">Secure & Grounded</h3>
+              <p className="text-sm text-muted-foreground">Answers are strictly sourced — no hallucinations, no invented information.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Disclaimer */}
+      <section className="border-t py-8">
+        <div className="container">
+          <div className="mx-auto flex max-w-2xl items-start gap-3 rounded-lg border bg-card p-4">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+            <p className="text-sm text-muted-foreground">
+              <strong>Disclaimer:</strong> Answers are based on available KB sources and may be incomplete. 
+              For critical issues, please contact the IT Help Desk directly or create a ServiceNow ticket.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t py-6">
+        <div className="container text-center text-sm text-muted-foreground">
+          © {new Date().getFullYear()} IKAP — Northeastern University IT
+        </div>
+      </footer>
     </div>
   );
 };

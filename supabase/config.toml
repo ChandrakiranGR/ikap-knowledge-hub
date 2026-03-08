@@ -1,0 +1,10 @@
+project_id = "xfcxwcuagpzelaztgnom"
+
+[functions.chat]
+verify_jwt = false
+
+[functions.ingest]
+verify_jwt = false
+
+[functions.ticket]
+verify_jwt = false
