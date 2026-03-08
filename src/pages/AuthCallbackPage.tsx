@@ -45,6 +45,8 @@ export default function AuthCallbackPage() {
         }
 
         // allow auth state to settle before entering guarded routes
+        await supabase.auth.getSession();
+        navigate(nextPath, { replace: true });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to complete sign in.");
       }
