@@ -18,6 +18,8 @@ export default function AuthCallbackPage() {
 
         const code = searchParams.get("code");
         const tokenHash = searchParams.get("token_hash") || hashParams.get("token_hash");
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
         const type = (searchParams.get("type") || hashParams.get("type") || "magiclink") as
           | "signup"
           | "invite"
@@ -32,10 +34,18 @@ export default function AuthCallbackPage() {
         } else if (tokenHash) {
           const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash });
           if (error) throw error;
-        } else if (!hashParams.get("access_token")) {
+        } else if (accessToken && refreshToken) {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+          if (error) throw error;
+        } else {
           throw new Error("Missing auth token in callback URL.");
         }
 
+        // allow auth state to settle before entering guarded routes
+        await supabase.auth.getSession();
         navigate(nextPath, { replace: true });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to complete sign in.");
