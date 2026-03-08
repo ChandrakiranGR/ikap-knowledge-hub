@@ -83,6 +83,46 @@ function parseHTML(html: string): ParsedArticle {
 function extractStructuredText(el: Element): string {
   const lines: string[] = [];
 
+  // Inline walker: returns inline text (for use inside paragraphs, list items, etc.)
+  function inlineWalk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent?.replace(/\s+/g, " ") || "";
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const elem = node as Element;
+    const tag = elem.tagName.toLowerCase();
+
+    // Convert <a> to Markdown link
+    if (tag === "a") {
+      const href = elem.getAttribute("href")?.trim();
+      const text = Array.from(elem.childNodes).map(inlineWalk).join("").trim();
+      if (href && text && !href.startsWith("#") && !href.startsWith("javascript:")) {
+        return `[${text}](${href})`;
+      }
+      return text;
+    }
+
+    // Bold/strong
+    if (tag === "strong" || tag === "b") {
+      const text = Array.from(elem.childNodes).map(inlineWalk).join("").trim();
+      return text ? `**${text}**` : "";
+    }
+
+    // Italic/em
+    if (tag === "em" || tag === "i") {
+      const text = Array.from(elem.childNodes).map(inlineWalk).join("").trim();
+      return text ? `*${text}*` : "";
+    }
+
+    // Line breaks
+    if (tag === "br") return "\n";
+
+    // Skip images
+    if (tag === "img") return "";
+
+    return Array.from(elem.childNodes).map(inlineWalk).join("");
+  }
+
   function walk(node: Node, depth = 0) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = node.textContent?.trim();
@@ -103,9 +143,9 @@ function extractStructuredText(el: Element): string {
       return;
     }
 
-    // List items
+    // List items — use inlineWalk to preserve links
     if (tag === "li") {
-      const text = (node as Element).textContent?.trim();
+      const text = inlineWalk(node).trim();
       if (text) {
         const parent = (node as Element).parentElement;
         const isOrdered = parent?.tagName.toLowerCase() === "ol";
@@ -115,18 +155,20 @@ function extractStructuredText(el: Element): string {
       return;
     }
 
-    // Paragraphs and divs get spacing
+    // Paragraphs and divs — use inlineWalk for the whole block
     if (tag === "p" || tag === "div") {
-      const before = lines.length;
-      node.childNodes.forEach((child) => walk(child, depth + 1));
-      if (lines.length > before) lines.push("");
+      const text = inlineWalk(node).trim();
+      if (text) {
+        lines.push(text);
+        lines.push("");
+      }
       return;
     }
 
     // Table rows
     if (tag === "tr") {
       const cells = Array.from((node as Element).querySelectorAll("td, th"))
-        .map((c) => c.textContent?.trim())
+        .map((c) => inlineWalk(c).trim())
         .filter(Boolean);
       if (cells.length) lines.push(cells.join(" | "));
       return;
