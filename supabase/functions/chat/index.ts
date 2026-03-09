@@ -103,7 +103,50 @@ serve(async (req) => {
       );
     }
 
-    // Compute embedding
+    // Rewrite follow-up queries using conversation context for better retrieval
+    let searchQuery = user_message;
+    if (Array.isArray(conversation_history) && conversation_history.length > 1) {
+      try {
+        const rewriteResp = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            temperature: 0,
+            max_tokens: 150,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a query rewriter. Given a conversation history and a follow-up question, rewrite the follow-up into a standalone search query that captures the full intent. Output ONLY the rewritten query, nothing else.",
+              },
+              {
+                role: "user",
+                content: `Conversation:\n${conversation_history
+                  .slice(-6)
+                  .map((m: any) => `${m.role}: ${m.content}`)
+                  .join("\n")}\n\nFollow-up: ${user_message}\n\nRewritten standalone query:`,
+              },
+            ],
+          }),
+        });
+        if (rewriteResp.ok) {
+          const rewriteData = await rewriteResp.json();
+          const rewritten = rewriteData.choices?.[0]?.message?.content?.trim();
+          if (rewritten) {
+            console.log(`Query rewritten: "${user_message}" -> "${rewritten}"`);
+            searchQuery = rewritten;
+          }
+        }
+      } catch (e) {
+        console.error("Query rewrite failed, using original:", e);
+      }
+    }
+
+    // Compute embedding using the (possibly rewritten) search query
     const embResp = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
       headers: {
@@ -112,7 +155,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: embeddingModel,
-        input: user_message,
+        input: searchQuery,
       }),
     });
     if (!embResp.ok) {
@@ -137,7 +180,7 @@ serve(async (req) => {
 
     // Platform-aware supplemental retrieval (improves precision for queries like "Android")
     const platformKeywords = ["android", "iphone", "ios", "windows", "mac", "chromebook", "linux"];
-    const normalizedMessage = user_message.toLowerCase();
+    const normalizedMessage = searchQuery.toLowerCase();
     const requestedPlatforms = platformKeywords.filter((p) => normalizedMessage.includes(p));
 
     let supplementalChunks: any[] = [];
