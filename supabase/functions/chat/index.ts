@@ -180,8 +180,14 @@ serve(async (req) => {
 
     // Platform-aware supplemental retrieval (improves precision for queries like "Android")
     const platformKeywords = ["android", "iphone", "ios", "windows", "mac", "chromebook", "linux"];
-    const normalizedMessage = searchQuery.toLowerCase();
+    const platformTypos: Record<string, string> = { "andriod": "android", "andoid": "android", "adroid": "android", "iohone": "iphone", "widows": "windows" };
+    // Normalize typos in the search query for platform detection
+    let normalizedMessage = searchQuery.toLowerCase();
+    for (const [typo, correct] of Object.entries(platformTypos)) {
+      normalizedMessage = normalizedMessage.replace(typo, correct);
+    }
     const requestedPlatforms = platformKeywords.filter((p) => normalizedMessage.includes(p));
+    console.log(`Search query: "${searchQuery}", Platforms detected: [${requestedPlatforms.join(", ")}]`);
 
     let supplementalChunks: any[] = [];
     if (requestedPlatforms.length > 0) {
