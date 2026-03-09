@@ -66,7 +66,7 @@ export default function ChatPage() {
 
     try {
       const { data, error } = await supabase.functions.invoke("chat", {
-        body: { session_id: sessionId, user_message: text, conversation_history: conversationHistory },
+        body: { session_id: sessionId, user_message: text },
       });
 
       if (controller.signal.aborted) return;
