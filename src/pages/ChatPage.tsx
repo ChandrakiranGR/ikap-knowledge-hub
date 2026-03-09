@@ -55,9 +55,16 @@ export default function ChatPage() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // Build conversation history from current messages
+    const currentMessages = [...messages, userMsg];
+    const conversationHistory = currentMessages.map((m) => ({
+      role: m.role,
+      content: m.content,
+    }));
+
     try {
       const { data, error } = await supabase.functions.invoke("chat", {
-        body: { session_id: sessionId, user_message: text },
+        body: { session_id: sessionId, user_message: text, conversation_history: conversationHistory },
       });
 
       if (controller.signal.aborted) return;
