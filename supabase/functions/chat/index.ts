@@ -180,7 +180,7 @@ serve(async (req) => {
 
     // Platform-aware supplemental retrieval (improves precision for queries like "Android")
     const platformKeywords = ["android", "iphone", "ios", "windows", "mac", "chromebook", "linux"];
-    const normalizedMessage = user_message.toLowerCase();
+    const normalizedMessage = searchQuery.toLowerCase();
     const requestedPlatforms = platformKeywords.filter((p) => normalizedMessage.includes(p));
 
     let supplementalChunks: any[] = [];
