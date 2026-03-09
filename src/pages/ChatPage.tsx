@@ -55,12 +55,14 @@ export default function ChatPage() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Build conversation history from current messages
-    const currentMessages = [...messages, userMsg];
-    const conversationHistory = currentMessages.map((m) => ({
-      role: m.role,
-      content: m.content,
-    }));
+    // NOTE: Conversation history disabled to reduce token usage/cost.
+    // Each query is now independent (no follow-up support).
+    // To re-enable multi-turn, uncomment below and pass conversationHistory in the body.
+    // const currentMessages = [...messages, userMsg];
+    // const conversationHistory = currentMessages.map((m) => ({
+    //   role: m.role,
+    //   content: m.content,
+    // }));
 
     try {
       const { data, error } = await supabase.functions.invoke("chat", {
