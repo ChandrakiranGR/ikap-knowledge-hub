@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
-import { useAuth, isNortheasternEmail } from "@/contexts/AuthContext";
+import { useAuth, isAdminEmail } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Mail, Loader2 } from "lucide-react";
@@ -25,8 +25,8 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!isNortheasternEmail(email)) {
-      setError("Only @northeastern.edu emails are allowed.");
+    if (!isAdminEmail(email)) {
+      setError("Only authorized admin emails are allowed.");
       return;
     }
     setLoading(true);
@@ -50,7 +50,7 @@ export default function AdminLoginPage() {
             </div>
             <h1 className="text-2xl font-bold text-foreground">Admin Login</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Restricted to <strong>@northeastern.edu</strong> accounts
+              Restricted to authorized admin accounts
             </p>
           </div>
 

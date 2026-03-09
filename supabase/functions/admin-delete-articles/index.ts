@@ -24,7 +24,8 @@ serve(async (req) => {
     }
     const token = authHeader.replace("Bearer ", "");
     const { data: { user } } = await supabase.auth.getUser(token);
-    if (!user?.email?.toLowerCase().endsWith("@northeastern.edu")) {
+    const { data: isAdminResult } = await supabase.rpc("is_admin", { check_email: user?.email || "" });
+    if (!isAdminResult) {
       return new Response(JSON.stringify({ error: "Admin access required" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

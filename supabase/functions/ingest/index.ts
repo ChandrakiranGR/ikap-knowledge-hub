@@ -87,7 +87,8 @@ serve(async (req) => {
 
       // Check admin access
       const email = user?.email || "";
-      if (!email.toLowerCase().endsWith("@northeastern.edu")) {
+      const { data: isAdminResult } = await supabase.rpc("is_admin", { check_email: email });
+      if (!isAdminResult) {
         return new Response(JSON.stringify({ error: "Admin access required" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
