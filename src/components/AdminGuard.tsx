@@ -25,7 +25,7 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
           <div className="mb-4 text-4xl">🚫</div>
           <h2 className="mb-2 text-xl font-bold text-foreground">Access Denied</h2>
           <p className="mb-4 text-muted-foreground">
-            Admin access is restricted to <strong>@northeastern.edu</strong> accounts only.
+            Admin access is restricted to authorized accounts only.
           </p>
           <p className="text-sm text-muted-foreground">
             Logged in as: {user.email}

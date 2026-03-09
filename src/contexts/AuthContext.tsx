@@ -13,8 +13,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const isNortheasternEmail = (email: string) =>
-  email.toLowerCase().endsWith("@northeastern.edu");
+const ADMIN_EMAILS = [
+  "guthavariramesh.c@northeastern.edu",
+  "sugurushetty.s@northeastern.edu",
+  "bhadrappanavar.p@northeastern.edu",
+];
+
+export const isAdminEmail = (email: string) =>
+  ADMIN_EMAILS.includes(email.toLowerCase());
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -39,11 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const isAdmin = !!user?.email && isNortheasternEmail(user.email);
+  const isAdmin = !!user?.email && isAdminEmail(user.email);
 
   const signInWithMagicLink = async (email: string) => {
-    if (!isNortheasternEmail(email)) {
-      return { error: new Error("Only @northeastern.edu emails are allowed for admin access.") };
+    if (!isAdminEmail(email)) {
+      return { error: new Error("Only authorized admin emails are allowed.") };
     }
     const { error } = await supabase.auth.signInWithOtp({
       email,
