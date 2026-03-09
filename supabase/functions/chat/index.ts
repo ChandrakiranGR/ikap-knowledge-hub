@@ -26,7 +26,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { session_id, user_message } = await req.json();
+    const { session_id, user_message, conversation_history } = await req.json();
     if (!user_message || typeof user_message !== "string") {
       return new Response(JSON.stringify({ error: "user_message required" }), {
         status: 400,
@@ -237,6 +237,11 @@ serve(async (req) => {
         max_tokens: maxTokens,
         messages: [
           { role: "system", content: systemPrompt },
+          // Include prior conversation history for multi-turn context
+          ...(Array.isArray(conversation_history) ? conversation_history.slice(0, -1).map((m: any) => ({
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content,
+          })) : []),
           {
             role: "user",
             content: `SOURCES:\n${contextText || "No relevant sources found."}\n\n---\nUSER QUESTION: ${user_message}`,
