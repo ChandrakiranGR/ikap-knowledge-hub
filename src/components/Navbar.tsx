@@ -9,10 +9,10 @@ export function Navbar() {
   const isAdminRoute = location.pathname.startsWith("/admin");
 
   return (
-    <header className="neu-gradient sticky top-0 z-50 border-b border-primary/20">
+    <header className="bg-foreground sticky top-0 z-50 border-b border-border">
       <div className="container flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <Shield className="h-7 w-7 text-primary-foreground" />
+          <Shield className="h-7 w-7 text-primary" />
           <span className="text-xl font-bold tracking-tight text-primary-foreground">IKAP</span>
         </Link>
 
