@@ -166,7 +166,22 @@ export default function ChatPage() {
       <div key={msg.id} className={`group flex ${isUser ? "justify-end" : "justify-start"}`}>
         <div className={`max-w-[80%] rounded-lg px-4 py-3 ${isUser ? "bg-chat-user text-foreground" : "bg-chat-assistant border text-foreground"}`}>
           <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed">
-            <ReactMarkdown>{msg.content}</ReactMarkdown>
+            <ReactMarkdown
+              components={{
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline hover:text-primary/80"
+                  >
+                    {children}
+                  </a>
+                ),
+              }}
+            >
+              {msg.content}
+            </ReactMarkdown>
           </div>
           {isUser && !loading && (
             <div className="mt-1 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
