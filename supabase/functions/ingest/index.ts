@@ -77,23 +77,26 @@ serve(async (req) => {
     const openaiKey = Deno.env.get("OPENAI_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get auth user from request
+    // Require authentication
     const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const { data: { user } } = await supabase.auth.getUser(token);
-      userId = user?.id || null;
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Not authenticated" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user } } = await supabase.auth.getUser(token);
+    const userId = user?.id || null;
 
-      // Check admin access
-      const email = user?.email || "";
-      const { data: isAdminResult } = await supabase.rpc("is_admin", { check_email: email });
-      if (!isAdminResult) {
-        return new Response(JSON.stringify({ error: "Admin access required" }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+    // Check admin access
+    const email = user?.email || "";
+    const { data: isAdminResult } = await supabase.rpc("is_admin", { check_email: email });
+    if (!isAdminResult) {
+      return new Response(JSON.stringify({ error: "Admin access required" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Get embedding model from settings

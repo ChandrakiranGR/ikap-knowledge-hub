@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
-import { useAuth, isAdminEmail } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, Mail, Loader2 } from "lucide-react";
@@ -25,8 +25,8 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!isAdminEmail(email)) {
-      setError("Only authorized admin emails are allowed.");
+    if (!email.trim()) {
+      setError("Please enter your email.");
       return;
     }
     setLoading(true);

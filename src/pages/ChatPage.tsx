@@ -131,7 +131,21 @@ export default function ChatPage() {
   };
 
   const handleFeedback = async (msgId: string, helpful: boolean) => {
-    toast.success(helpful ? "Thanks for the positive feedback!" : "Thanks for the feedback — we'll improve.");
+    try {
+      const { error } = await supabase.from("feedback").insert({
+        chat_log_id: msgId,
+        helpful,
+      });
+      if (error) {
+        console.error("Feedback error:", error);
+        toast.error("Failed to save feedback.");
+        return;
+      }
+      toast.success(helpful ? "Thanks for the positive feedback!" : "Thanks for the feedback — we'll improve.");
+    } catch (err) {
+      console.error("Feedback error:", err);
+      toast.error("Failed to save feedback.");
+    }
   };
 
   const renderMessage = (msg: ChatMessage, index: number) => {

@@ -13,19 +13,24 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const ADMIN_EMAILS = [
-  "guthavariramesh.c@northeastern.edu",
-  "sugurushetty.s@northeastern.edu",
-  "bhadrappanavar.p@northeastern.edu",
-];
-
-export const isAdminEmail = (email: string) =>
-  ADMIN_EMAILS.includes(email.toLowerCase());
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const checkAdmin = async (email: string | undefined) => {
+    if (!email) {
+      setIsAdmin(false);
+      return;
+    }
+    try {
+      const { data } = await supabase.rpc("is_admin", { check_email: email });
+      setIsAdmin(!!data);
+    } catch {
+      setIsAdmin(false);
+    }
+  };
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -33,6 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
+        // Defer admin check to avoid Supabase client deadlock
+        setTimeout(() => checkAdmin(session?.user?.email ?? undefined), 0);
       }
     );
 
@@ -40,17 +47,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      checkAdmin(session?.user?.email ?? undefined);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const isAdmin = !!user?.email && isAdminEmail(user.email);
-
   const signInWithMagicLink = async (email: string) => {
-    if (!isAdminEmail(email)) {
-      return { error: new Error("Only authorized admin emails are allowed.") };
-    }
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/admin/ingest` },
@@ -60,6 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setIsAdmin(false);
   };
 
   return (
