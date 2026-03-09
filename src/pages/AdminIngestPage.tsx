@@ -4,7 +4,7 @@ import { AdminGuard } from "@/components/AdminGuard";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Upload, FileText, Loader2, CheckCircle, FileUp, FileJson, FileCode } from "lucide-react";
+import { Upload, FileText, Loader2, CheckCircle, FileUp, FileJson, FileCode, Table } from "lucide-react";
 
 interface ParsedArticle {
   title: string;
@@ -311,6 +311,74 @@ function parseJSON(jsonStr: string): ParsedArticle[] {
   });
 }
 
+// CSV parsing for incident data
+function parseCSVRow(row: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < row.length; i++) {
+    const ch = row[i];
+    if (inQuotes) {
+      if (ch === '"' && row[i + 1] === '"') { current += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { current += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { result.push(current); current = ""; }
+      else { current += ch; }
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCSVRow(lines[0]).map(h => h.trim().toLowerCase());
+  return lines.slice(1).map(line => {
+    const values = parseCSVRow(line);
+    const obj: Record<string, string> = {};
+    headers.forEach((h, i) => { obj[h] = (values[i] || "").trim(); });
+    return obj;
+  });
+}
+
+function createIncidentArticle(row: Record<string, string>): ParsedArticle {
+  const shortDesc = row["short_description"] || "Untitled Incident";
+  const parts: string[] = [`# ${shortDesc}`];
+
+  if (row["description"]) {
+    parts.push("", "## Problem Description", row["description"]);
+  }
+  if (row["work_notes"]) {
+    parts.push("", "## Work Notes", row["work_notes"]);
+  }
+  if (row["comments_and_work_notes"] && row["comments_and_work_notes"] !== row["work_notes"]) {
+    parts.push("", "## Comments and Work Notes", row["comments_and_work_notes"]);
+  }
+  if (row["close_notes"]) {
+    parts.push("", "## Resolution", row["close_notes"]);
+  }
+  if (row["comments"] && row["comments"] !== row["comments_and_work_notes"]) {
+    parts.push("", "## Additional Comments", row["comments"]);
+  }
+
+  const tags: string[] = [];
+  if (row["u_application_service"]) tags.push(row["u_application_service"]);
+  if (row["state"]) tags.push(`state:${row["state"]}`);
+
+  return {
+    title: shortDesc,
+    article_id: "",
+    category: row["business_service"] || "",
+    tags: tags.join(", "),
+    source_url: "",
+    content: parts.join("\n"),
+    content_type: "csv_incident",
+  };
+}
+
 export default function AdminIngestPage() {
   const [title, setTitle] = useState("");
   const [articleId, setArticleId] = useState("");
@@ -385,12 +453,16 @@ export default function AdminIngestPage() {
 
         let articles: ParsedArticle[] = [];
 
-        if (ext === "json") {
+        if (ext === "csv") {
+          const rows = parseCSV(text);
+          articles = rows
+            .filter(r => r["short_description"]?.trim())
+            .map(createIncidentArticle);
+        } else if (ext === "json") {
           articles = parseJSON(text);
         } else if (ext === "html" || ext === "htm") {
           articles = [parseHTML(text)];
         } else {
-          // Treat as plain text
           articles = [{
             title: file.name.replace(/\.[^.]+$/, ""),
             article_id: "",
@@ -572,7 +644,7 @@ For additional help, contact the IT Service Desk:
                 <FileUp className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
                 <h3 className="mb-1 font-semibold text-foreground">Upload KB Files</h3>
                 <p className="mb-4 text-sm text-muted-foreground">
-                  Supports <strong>.html</strong>, <strong>.json</strong>, and <strong>.txt</strong> files. JSON can contain a single article or an array of articles.
+                  Supports <strong>.html</strong>, <strong>.json</strong>, <strong>.csv</strong>, and <strong>.txt</strong> files. CSV files with incident data are auto-parsed.
                 </p>
 
                 <div className="mb-4 rounded-lg bg-muted p-3 text-left text-xs text-muted-foreground">
@@ -614,7 +686,7 @@ For additional help, contact the IT Service Desk:
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".html,.htm,.json,.txt"
+                  accept=".html,.htm,.json,.txt,.csv"
                   multiple
                   onChange={handleFileUpload}
                   className="hidden"
